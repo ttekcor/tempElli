@@ -14,6 +14,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.post("/api/audio")
 async def process_audio(file: UploadFile = File(...)):
     try:
