@@ -1,5 +1,5 @@
 ﻿// src/App.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Send,
   MessageCircle,
@@ -43,6 +43,8 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const textAreaRef = useRef<HTMLTextAreaElement>(null);
+
   // Загрузка темы из localStorage при загрузке
   useEffect(() => {
     const savedTheme = localStorage.getItem("elli-theme");
@@ -60,6 +62,14 @@ function App() {
       document.documentElement.classList.remove("dark");
     }
   }, [isDarkMode]);
+
+  // Автоматическое изменение высоты текстовой области
+  useEffect(() => {
+    if (textAreaRef.current) {
+      textAreaRef.current.style.height = "auto";
+      textAreaRef.current.style.height = textAreaRef.current.scrollHeight + "px";
+    }
+  }, [input]);
 
   // Обработчик ответов от ассистента
   const handleAssistantResponse = (text: string, transcribedText?: string) => {
@@ -116,7 +126,25 @@ function App() {
     onError: handleError,
   });
 
-  // ... остальной код остается таким же как в предыдущем сообщении ...
+  // Обработчик для текстовой области с поддержкой табов
+  const handleTextAreaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    } else if (e.key === "Tab") {
+      e.preventDefault();
+      const start = e.currentTarget.selectionStart;
+      const end = e.currentTarget.selectionEnd;
+      const newValue = input.substring(0, start) + "  " + input.substring(end);
+      setInput(newValue);
+      // Возвращаем курсор после таба
+      setTimeout(() => {
+        if (textAreaRef.current) {
+          textAreaRef.current.selectionStart = textAreaRef.current.selectionEnd = start + 2;
+        }
+      }, 0);
+    }
+  };
 
   // Получаем активный чат
   const activeChat = chats.find((chat) => chat.id === activeChatId) || chats[0];
@@ -149,13 +177,11 @@ function App() {
       )
     );
 
+    // Очищаем поле ввода
+    setInput("");
+
     // Отправляем на сервер
     const success = sendMessage({ type: "text_message", text: input });
-    if (!success) {
-      setIsLoading(false);
-      handleError("Не удалось отправить сообщение. Проверьте подключение.");
-    }
-
     if (!success) {
       setIsLoading(false);
       handleError("Не удалось отправить сообщение. Проверьте подключение.");
@@ -419,7 +445,7 @@ function App() {
                         : `${messageBgClass} ${textClass} border ${messageBorderClass} rounded-bl-none`
                     }`}
                   >
-                    <p className="text-sm">{message.text}</p>
+                    <p className="text-sm whitespace-pre-wrap">{message.text}</p>
                     <p
                       className={`text-xs mt-1 ${
                         message.sender === "user"
@@ -465,37 +491,40 @@ function App() {
         <div
           className={`border-t ${sidebarBorderClass} ${sidebarBgClass} p-4 transition-colors duration-200`}
         >
-          <div className="flex items-center gap-3">
-            <input
-              type="text"
+          <div className="flex items-end gap-3">
+            <textarea
+              ref={textAreaRef}
               placeholder={
                 isConnected
-                  ? "Введите сообщение..."
+                  ? "Введите сообщение... (Shift+Enter для новой строки)"
                   : "Ожидание подключения к серверу..."
               }
-              className={`flex-1 border rounded-full px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition ${inputBgClass}`}
+              className={`flex-1 border rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition ${inputBgClass} resize-none min-h-[52px] max-h-32`}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSend()}
+              onKeyDown={handleTextAreaKeyDown}
               disabled={!isConnected || isLoading}
+              rows={1}
             />
 
-            <button
-              onClick={handleSend}
-              disabled={!input.trim() || !isConnected || isLoading}
-              className="p-3 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
-            >
-              <Send size={20} />
-            </button>
+            <div className="flex gap-2 mb-1">
+              <button
+                onClick={handleSend}
+                disabled={!input.trim() || !isConnected || isLoading}
+                className="p-3 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+              >
+                <Send size={20} />
+              </button>
 
-            <button
-              onClick={() => handleVoiceMessage({ type: "voice_start" })}
-              disabled={!isConnected || isLoading}
-              className="p-3 bg-green-500 text-white rounded-full hover:bg-green-600 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
-              title="Голосовой ввод"
-            >
-              <Mic size={20} />
-            </button>
+              <button
+                onClick={() => handleVoiceMessage({ type: "voice_start" })}
+                disabled={!isConnected || isLoading}
+                className="p-3 bg-green-500 text-white rounded-full hover:bg-green-600 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+                title="Голосовой ввод"
+              >
+                <Mic size={20} />
+              </button>
+            </div>
           </div>
         </div>
       </main>
